@@ -1,0 +1,110 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+
+namespace EmployeeTimeTable.Controllers
+{
+    public class Employee
+    {
+        public string Name { get; set; }
+        public double TotalTimeWorked { get; set; }
+    }
+
+    public class EmployeeTableController : Controller
+    {
+        private const string ApiEndpoint = "https://rc-vault-fap-live-1.azurewebsites.net/api/gettimeentries?code=http://vo17rne8vuzxzpjo5ealljxjmrw07law99qtd90zat9ffoqjkkucgq%3D%3D/";
+
+        public async Task<IActionResult> Index()
+        {
+            List<Employee> employees = await GetEmployeesAsync();
+            employees = employees.OrderBy(emp => emp.TotalTimeWorked).ToList();
+
+            return View(employees);
+        }
+
+        private async Task<List<Employee>> GetEmployeesAsync()
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                HttpResponseMessage response = await client.GetAsync(ApiEndpoint);
+                response.EnsureSuccessStatusCode();
+                string json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<Employee>>(json);
+            }
+        }
+    }
+}
+
+// index.html (to visualize the output in piechart)
+
+@model List<Employee>
+
+@{
+    ViewData["Title"] = "Employee Time Table";
+}
+
+<h1>Employee Time Table</h1>
+
+<table>
+    <thead>
+        <tr>
+            <th>Employee Name</th>
+            <th>Total Time Worked</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var employee in Model)
+        {
+            <tr @(employee.TotalTimeWorked < 100 ? "style='background-color: red;'" : "")>
+                <td>@employee.Name</td>
+                <td>@FormatTimeSpan(employee.TotalTimeWorked)</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<div id="employeeChart" style="width: 400px; height: 400px;"></div>
+
+@section scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        var employees = @Html.Raw(JsonConvert.SerializeObject(Model));
+
+        var employeeNames = employees.map(emp => emp.Name);
+        var totalTime = employees.map(emp => emp.TotalTimeWorked);
+
+        var ctx = document.getElementById('employeeChart').getContext('2d');
+        var chart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: employeeNames,
+                datasets: [{
+                    data: totalTime,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.5)',
+                        'rgba(54, 162, 235, 0.5)',
+                        'rgba(255, 206, 86, 0.5)',
+                        'rgba(75, 192, 192, 0.5)',
+                        'rgba(153, 102, 255, 0.5)',
+                        'rgba(255, 159, 64, 0.5)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        function FormatTimeSpan(hours) {
+            var totalHours = Math.floor(hours);
+            var minutes = Math.round((hours - totalHours) * 60);
+            return totalHours + " hrs " + minutes + " min";
+        }
+    </script>
+}
